@@ -1,0 +1,21 @@
+services:
+  api:
+    build: ./server
+    environment:
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env (see .env.example)}
+      CLIENT_ORIGIN: http://localhost:${WEB_PORT:-8717}
+    volumes:
+      - app-data:/data
+    restart: unless-stopped
+
+  web:
+    build: ./client
+    ports:
+      - "${WEB_PORT:-8717}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  app-data:

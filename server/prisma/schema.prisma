@@ -1,0 +1,120 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 String   @id @default(cuid())
+  displayName        String
+  email              String   @unique
+  passwordHash       String
+  timeZone           String   @default("UTC")
+  dateFormat         String   @default("DD MMM YYYY")
+  firstDayOfWeek     Int      @default(1)
+  remindersEnabled   Boolean  @default(true)
+  resetTokenHash     String?
+  resetTokenExpires  DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  people        Person[]
+  events        Event[]
+  categories    Category[]
+  notifications Notification[]
+}
+
+model Person {
+  id           String   @id @default(cuid())
+  userId       String
+  name         String
+  nickname     String?
+  relationship String?
+  email        String?
+  phone        String?
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  events Event[]
+
+  @@index([userId])
+}
+
+// userId null => system category available to everyone
+model Category {
+  id          String  @id @default(cuid())
+  userId      String?
+  name        String
+  description String?
+  active      Boolean @default(true)
+
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  events Event[]
+}
+
+model Event {
+  id            String    @id @default(cuid())
+  userId        String
+  personId      String?
+  categoryId    String?
+  title         String
+  // Date-only values are stored as YYYY-MM-DD so they never shift with time zones.
+  eventDate     String
+  startTime     String?
+  endTime       String?
+  isAllDay      Boolean   @default(true)
+  description   String?
+  location      String?
+  birthYear     Int?
+  // NONE | WEEKLY | MONTHLY | YEARLY
+  recurrence    String    @default("NONE")
+  // Last date (YYYY-MM-DD) on which the series may occur; null = forever
+  recurrenceEnd String?
+  // ACTIVE | COMPLETED | CANCELLED
+  status        String    @default("ACTIVE")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  person    Person?   @relation(fields: [personId], references: [id], onDelete: SetNull)
+  category  Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  reminders Reminder[]
+
+  @@index([userId, eventDate])
+}
+
+model Reminder {
+  id         String   @id @default(cuid())
+  eventId    String
+  daysBefore Int      @default(1)
+  enabled    Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  event         Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  notifications Notification[]
+}
+
+model Notification {
+  id             String    @id @default(cuid())
+  userId         String
+  reminderId     String?
+  eventId        String?
+  occurrenceDate String
+  title          String
+  message        String
+  readAt         DateTime?
+  createdAt      DateTime  @default(now())
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reminder Reminder? @relation(fields: [reminderId], references: [id], onDelete: Cascade)
+
+  // Guarantees one notification per reminder per occurrence (no duplicates).
+  @@unique([reminderId, occurrenceDate])
+  @@index([userId, readAt])
+}
